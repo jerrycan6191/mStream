@@ -1,6 +1,69 @@
 var MSTREAMPLAYER = (function () {
   let mstreamModule = {};
 
+  //set MediaSession setActionHandler if mediaSession is supported
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.setActionHandler('play', function() { getCurrentPlayer().playerObject.play(); });
+    navigator.mediaSession.setActionHandler('pause', function() { getCurrentPlayer().playerObject.pause(); });
+    navigator.mediaSession.setActionHandler('stop', function() { getCurrentPlayer().playerObject.stop(); });
+    //navigator.mediaSession.setActionHandler('seekbackward', function() { mstreamModule.goBackSeek(10); });
+    //navigator.mediaSession.setActionHandler('seekforward', function() { mstreamModule.goForwardSeek(10); });
+    navigator.mediaSession.setActionHandler('previoustrack', function() { goToPreviousSong(); });
+    navigator.mediaSession.setActionHandler('nexttrack', function() { goToNextSong(); });
+  }
+
+  //Set (new) metadata in mediaSession
+  var updateMediaSession_counter = 0;
+  function updateMediaSession() {
+    if ('mediaSession' in navigator) {
+
+      //console.log(mstreamModule.playerStats.metadata);
+      //console.log(mstreamModule.playerStats.metadata.title);
+
+      if (typeof mstreamModule.playerStats.metadata.title === "undefined" && updateMediaSession_counter < 10) {
+
+        setTimeout(function() {
+          updateMediaSession_counter++;
+          updateMediaSession();
+        }, 50);
+
+      } else {
+        updateMediaSession_counter = 0;
+        let artwork = '/public/img/default.png';
+        let title = mstreamModule.playerStats.metadata.title;
+        let artist = mstreamModule.playerStats.metadata.artist;
+        let album = mstreamModule.playerStats.metadata.album;
+
+        if (mstreamModule.playerStats.metadata['album-art']) {
+          artwork = '/album-art/' + mstreamModule.playerStats.metadata['album-art'] + '?token=' + MSTREAMAPI.currentServer.token;
+        } 
+
+        if (!title) {
+          const currentSong = MSTREAMPLAYER.getCurrentSong();
+          const filepathArray = currentSong.filepath.split("/");
+          title = filepathArray[filepathArray.length - 1];
+        }
+
+        if (!artist) {artist = '';}
+        if (!album) {album = '';}
+
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: title,
+          artist: artist,
+          album: album,
+          artwork: [
+            { src: artwork,  sizes: '96x96',   type: 'image/png' },
+            { src: artwork, sizes: '128x128', type: 'image/png' },
+            { src: artwork, sizes: '192x192', type: 'image/png' },
+            { src: artwork, sizes: '256x256', type: 'image/png' },
+            { src: artwork, sizes: '384x384', type: 'image/png' },
+            { src: artwork, sizes: '512x512', type: 'image/png' },
+          ]
+        });
+      }
+    }
+  }
+
   // Playlist variables
   mstreamModule.positionCache = { val: -1 };
   mstreamModule.playlist = [];
@@ -438,6 +501,8 @@ var MSTREAMPLAYER = (function () {
       mstreamModule.resetCurrentMetadata();
     }
 
+    updateMediaSession();
+
     // connect to visualizer
     if (VIZ) {
       var audioCtx =  VIZ.get();
@@ -642,10 +707,18 @@ var MSTREAMPLAYER = (function () {
         callMeOnStreamEnd();
       },
       onpause: function () {
+        //Feeback for Mediasession
+        if ('mediaSession' in navigator) {
+          navigator.mediaSession.playbackState = "paused";
+        }
       },
       onstop: function () {
       },
       onplay: function () {
+        //Feeback for Mediasession
+        if ('mediaSession' in navigator) {
+          navigator.mediaSession.playbackState = "playing";
+        }
       },
       onplayerror: function() {
         console.log('PLAY ERROR');
